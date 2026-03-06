@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "pull:scottsdale:seed": "node scripts/pull_scottsdale_seed.mjs",
     "pull:scottsdale:curated": "node scripts/pull_scottsdale_city_sources.mjs",
-    "sync:google-sheets": "node scripts/sync_csv_to_google_sheets.mjs"
+    "sync:google-sheets": "node scripts/sync_csv_to_google_sheets.mjs",
+    "sync:google-sheets:supabase": "node scripts/sync_supabase_cache_to_google_sheets.mjs"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",

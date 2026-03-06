@@ -1,40 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { join } from "node:path";
-import { appendCsvRow, countCsvRowsForDate, ensureCsvHeader, envNumber } from "@/lib/csv-usage";
-
-const requestLogPath = join(process.cwd(), "data", "nearby_requests.csv");
-const spendAuditPath = join(process.cwd(), "data", "spend_audit.csv");
-
-async function ensureRequestLogHeader() {
-  await ensureCsvHeader(requestLogPath, "request_id,requested_at,status,lat,lng,requester_email");
-}
-
-async function ensureSpendAuditHeader() {
-  await ensureCsvHeader(spendAuditPath, "logged_at,kind,provider,estimated_usd,notes");
-}
-
-async function logRequest(params: { requestId: string; lat: number; lng: number; requesterEmail: string }) {
-  await ensureRequestLogHeader();
-  await appendCsvRow(requestLogPath, [
-    params.requestId,
-    new Date().toISOString(),
-    "pending_approval",
-    String(params.lat),
-    String(params.lng),
-    params.requesterEmail
-  ]);
-}
-
-async function logSpend(params: { kind: string; provider: string; estimatedUsd: number; notes: string }) {
-  await ensureSpendAuditHeader();
-  await appendCsvRow(spendAuditPath, [
-    new Date().toISOString(),
-    params.kind,
-    params.provider,
-    params.estimatedUsd.toFixed(4),
-    params.notes
-  ]);
-}
+import { configuredCap, countNewCityRequestsToday, logNewCityRequest, logSpend } from "@/lib/system-logs";
 
 async function sendApprovalEmail(params: { requestId: string; lat: number; lng: number; requesterEmail: string }) {
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -76,7 +41,7 @@ async function sendApprovalEmail(params: { requestId: string; lat: number; lng: 
   await logSpend({
     kind: "email",
     provider: "resend",
-    estimatedUsd: envNumber("ESTIMATED_RESEND_EMAIL_COST_USD", 0),
+    estimatedUsd: configuredCap("ESTIMATED_RESEND_EMAIL_COST_USD", 0),
     notes: `city_request:${params.requestId}`
   });
 
@@ -102,15 +67,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "lat and lng are required" }, { status: 400 });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const dailyLimit = envNumber("DAILY_NEW_CITY_REQUEST_LIMIT", 10);
-  const todayCount = await countCsvRowsForDate(requestLogPath, 1, today);
+  const dailyLimit = configuredCap("DAILY_NEW_CITY_REQUEST_LIMIT", 10);
+  const todayCount = await countNewCityRequestsToday();
   if (todayCount >= dailyLimit) {
     return NextResponse.json({ error: "Daily request cap reached. Try again tomorrow." }, { status: 429 });
   }
 
   const requestId = `REQ-${Date.now().toString(36).toUpperCase()}`;
-  await logRequest({ requestId, lat, lng, requesterEmail });
+  await logNewCityRequest({ requestId, lat, lng, requesterEmail });
   const email = await sendApprovalEmail({ requestId, lat, lng, requesterEmail });
 
   return NextResponse.json({

@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { join } from "node:path";
-import { appendCsvRow, countCsvRowsForDateWithValue, ensureCsvHeader, envNumber } from "@/lib/csv-usage";
+import { configuredCap, countWeatherCallsToday, logSpend } from "@/lib/system-logs";
 import { demoWeather } from "@/lib/demo-data";
-
-const spendAuditPath = join(process.cwd(), "data", "spend_audit.csv");
 
 export async function GET(request: NextRequest) {
   // Strict guardrail mode: never call external weather API.
@@ -24,8 +21,8 @@ export async function GET(request: NextRequest) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const dailyLimit = envNumber("DAILY_WEATHER_CALL_LIMIT", 500);
-  const todayWeatherCalls = await countCsvRowsForDateWithValue(spendAuditPath, 0, today, 1, "weather_call");
+  const dailyLimit = configuredCap("DAILY_WEATHER_CALL_LIMIT", 500);
+  const todayWeatherCalls = await countWeatherCallsToday();
   if (todayWeatherCalls >= dailyLimit) {
     return NextResponse.json(demoWeather);
   }
@@ -50,13 +47,11 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Could not fetch weather." }, { status: 500 });
   } finally {
-    await ensureCsvHeader(spendAuditPath, "logged_at,kind,provider,estimated_usd,notes");
-    await appendCsvRow(spendAuditPath, [
-      new Date().toISOString(),
-      "weather_call",
-      "openweather",
-      envNumber("ESTIMATED_WEATHER_CALL_COST_USD", 0).toFixed(4),
-      `lat:${lat}|lng:${lng}`
-    ]);
+    await logSpend({
+      kind: "weather_call",
+      provider: "openweather",
+      estimatedUsd: configuredCap("ESTIMATED_WEATHER_CALL_COST_USD", 0),
+      notes: `lat:${lat}|lng:${lng}`
+    });
   }
 }

@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { join } from "node:path";
-import { appendCsvRow, countCsvRowsForDate, ensureCsvHeader, envNumber } from "@/lib/csv-usage";
 import { getDemoActivities } from "@/lib/demo-activity-store";
 import { haversineKm } from "@/lib/filter";
 import { inferCuisineFromName, normalizeCuisineTags } from "@/lib/food";
+import { configuredCap, countNearbyPullRowsToday, logNearbyPullRows, logSpend } from "@/lib/system-logs";
 import { Activity, Category } from "@/lib/types";
 
 type NearbyResponse = Record<Category, Activity[]>;
-const pullLogPath = join(process.cwd(), "data", "nearby_pulls.csv");
-const spendAuditPath = join(process.cwd(), "data", "spend_audit.csv");
 const bannedVenueTypes = new Set([
   "bar",
   "nightclub",
@@ -24,34 +21,24 @@ const bannedVenueTypes = new Set([
 ]);
 const bannedNameKeywords = ["bar", "nightclub", "hookah", "casino", "strip club", "liquor", "sportsbook", "dive bar"];
 
-async function ensurePullLogHeader() {
-  await ensureCsvHeader(pullLogPath, "pulled_at,lat,lng,category,name,source_url");
-}
-
-async function ensureSpendAuditHeader() {
-  await ensureCsvHeader(spendAuditPath, "logged_at,kind,provider,estimated_usd,notes");
-}
-
 async function logNearbyPull(lat: number, lng: number, payload: NearbyResponse, source: "overpass" | "fallback") {
-  await ensurePullLogHeader();
-  const pulledAt = new Date().toISOString();
-  let rowCount = 0;
-  const writes: Array<Promise<void>> = [];
+  const rows: Array<{ category: string; name: string; source_url: string | null }> = [];
   (Object.keys(payload) as Category[]).forEach((category) => {
     payload[category].forEach((activity) => {
-      rowCount += 1;
-      writes.push(appendCsvRow(pullLogPath, [pulledAt, String(lat), String(lng), category, activity.name, activity.source_url ?? ""]));
+      rows.push({
+        category,
+        name: activity.name,
+        source_url: activity.source_url ?? null
+      });
     });
   });
-  if (writes.length) await Promise.all(writes);
-  await ensureSpendAuditHeader();
-  await appendCsvRow(spendAuditPath, [
-    new Date().toISOString(),
-    "nearby_pull",
-    source,
-    envNumber("ESTIMATED_NEARBY_PULL_COST_USD", 0).toFixed(4),
-    `rows:${rowCount}`
-  ]);
+  await logNearbyPullRows({ lat, lng, rows, provider: source });
+  await logSpend({
+    kind: "nearby_pull",
+    provider: source,
+    estimatedUsd: configuredCap("ESTIMATED_NEARBY_PULL_COST_USD", 0),
+    notes: `rows:${rows.length}`
+  });
 }
 
 function groupTopByCategory(activities: Activity[], lat: number, lng: number, maxPerCategory: number): NearbyResponse {
@@ -249,17 +236,16 @@ export async function GET(request: NextRequest) {
   const lat = Number(request.nextUrl.searchParams.get("lat"));
   const lng = Number(request.nextUrl.searchParams.get("lng"));
   const requestedRadiusKm = Number(request.nextUrl.searchParams.get("radiusKm") ?? "24");
-  const maxRadiusKm = envNumber("MAX_NEARBY_RADIUS_KM", 25);
+  const maxRadiusKm = configuredCap("MAX_NEARBY_RADIUS_KM", 25);
   const radiusKm = Math.min(Number.isFinite(requestedRadiusKm) ? requestedRadiusKm : 24, maxRadiusKm);
-  const maxPerCategory = envNumber("MAX_NEARBY_RESULTS_PER_CATEGORY", 10);
+  const maxPerCategory = configuredCap("MAX_NEARBY_RESULTS_PER_CATEGORY", 10);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json({ error: "lat and lng are required" }, { status: 400 });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const dailyLimit = envNumber("DAILY_NEARBY_PULL_LIMIT", 20);
-  const todayPullRows = await countCsvRowsForDate(pullLogPath, 0, today);
+  const dailyLimit = configuredCap("DAILY_NEARBY_PULL_LIMIT", 20);
+  const todayPullRows = await countNearbyPullRowsToday();
   if (todayPullRows >= dailyLimit * Math.max(1, maxPerCategory)) {
     return NextResponse.json({ error: "Daily nearby pull cap reached." }, { status: 429 });
   }

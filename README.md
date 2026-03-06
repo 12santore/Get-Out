@@ -7,6 +7,7 @@ Get Out is a full-stack Next.js app that helps Kara beat boredom by recommending
 - Supabase (Postgres + Auth)
 - OpenWeather API
 - Leaflet (OpenStreetMap)
+- Vercel Cron Jobs (hosted daily cache refresh)
 
 ## Demo Data Spreadsheet
 - Scottsdale activity spreadsheet: `data/scottsdale_activities.csv`
@@ -14,6 +15,15 @@ Get Out is a full-stack Next.js app that helps Kara beat boredom by recommending
 - Current seed: 50 restaurants + 50 trails/movement options pulled from OpenStreetMap around Scottsdale.
 - Curated municipality/CVB review pull: `data/scottsdale_city_sources_review.csv`
 - Spend audit log: `data/spend_audit.csv`
+
+## Production Storage Model
+- Supabase is the source of truth for:
+  - activity catalog (`activities`)
+  - curated cache review items (`cache_review_items`)
+  - nearby pull logs (`nearby_pull_events`)
+  - city update requests (`city_update_requests`)
+  - spend audit (`system_spend_audit`)
+- Local CSV files are fallback/dev artifacts only.
 
 ## Quick Start
 1. Install dependencies:
@@ -64,6 +74,14 @@ What happens:
 - Every file in `data/*.csv` becomes/updates a tab in your sheet.
 - Example: `data/scottsdale_activities.csv` -> tab `scottsdale_activities`.
 
+## Sync Supabase Cache To Google Sheets (Production)
+- Use this to export hosted/live cache data (no local CSV dependency):
+  - `npm run sync:google-sheets:supabase`
+- Tabs created/updated:
+  - `activities_live`
+  - `cache_review_live`
+  - `spend_audit_live`
+
 ## Supabase Auth Setup
 1. In Supabase Dashboard, enable Email provider under `Authentication -> Providers`.
 2. Add redirect URL: `http://localhost:3000`.
@@ -109,6 +127,8 @@ See `.env.example`:
 - `GET /api/weather`: fetch weather summary by lat/lng.
 - `POST /api/auth/request-link`: invite-code gated magic-link request.
 - `POST /api/resources/request`: logs a New City data-pull request for manual approval and sends optional email notification.
+- `GET /api/jobs/daily-cache-refresh`: hosted daily cache refresh job endpoint (for Vercel Cron).
+- `GET /api/cache/review`: fetch cache review rows from Supabase.
 
 ## PWA (Add to Home Screen)
 - The app now includes a web app manifest and service worker for installability.
@@ -144,3 +164,18 @@ See `.env.example`:
   - Weather calls, nearby pulls, and request-email sends append spend estimates to `data/spend_audit.csv`.
 - Client-side weather cache:
   - Weather is cached for 60 minutes in browser storage to reduce API calls when weather API is enabled.
+
+## Hosted Jobs
+- `vercel.json` defines a daily cron at `14:00 UTC`:
+  - `GET /api/jobs/daily-cache-refresh`
+- Job behavior:
+  - Pulls Scottsdale seed activities (OSM/Overpass)
+  - Pulls curated municipality/CVB review candidates
+  - Inserts new seed rows into `activities`
+  - Refreshes `cache_review_items` snapshot
+  - Appends spend audit entry (`cache_refresh`)
+- Configure:
+  - `CACHE_REFRESH_ENABLED`
+  - `DAILY_CACHE_REFRESH_LIMIT`
+  - `CRON_SECRET`
+  - `ESTIMATED_CACHE_REFRESH_COST_USD`
