@@ -1,0 +1,87 @@
+# Get Out (V0 Prototype)
+
+Get Out is a full-stack Next.js app that helps Kara beat boredom by recommending context-aware activities and places.
+
+## Stack
+- Next.js + React + TypeScript + Tailwind
+- Supabase (Postgres + Auth)
+- OpenWeather API
+- Leaflet (OpenStreetMap)
+
+## Demo Data Spreadsheet
+- Scottsdale activity spreadsheet: `data/scottsdale_activities.csv`
+- In demo mode (when Supabase keys are missing), `/api/activities` pulls from this CSV.
+- Current seed: 50 restaurants + 50 trails/movement options pulled from OpenStreetMap around Scottsdale.
+- Curated municipality/CVB review pull: `data/scottsdale_city_sources_review.csv`
+
+## Quick Start
+1. Install dependencies:
+   `npm install`
+2. Copy environment file:
+   `cp .env.example .env.local`
+3. Fill all env vars in `.env.local`.
+4. Run database migration and seed (Supabase CLI):
+   - `supabase db push`
+   - `psql "$SUPABASE_DB_URL" -f supabase/seed.sql` (or run seed in SQL editor)
+5. Start app:
+   `npm run dev`
+
+## Scottsdale Source Pulls
+- Initial base seed (restaurants + trails from OSM): `npm run pull:scottsdale:seed`
+- Municipality/CVB event pull for manual review: `npm run pull:scottsdale:curated`
+- Curated pull sources:
+  - City of Scottsdale community calendar API (`https://api.withapps.io/api/v2/organizations/16/communities/190/resources/published`)
+  - Experience Scottsdale events listing (`https://www.experiencescottsdale.com/events/`) + event detail pages
+- Output is intentionally written to a **review CSV** so you can manually curate before merge.
+
+## Supabase Auth Setup
+1. In Supabase Dashboard, enable Email provider under `Authentication -> Providers`.
+2. Add redirect URL: `http://localhost:3000`.
+3. Ensure `NEXT_PUBLIC_APP_URL` in `.env.local` matches the redirect URL.
+4. Add one or more invite codes in `.env.local` via `INVITE_CODES=code1,code2`.
+
+## Environment Variables
+See `.env.example`:
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENWEATHER_API_KEY`
+- `INVITE_CODES`
+- `NEXT_PUBLIC_DEFAULT_LAT`
+- `NEXT_PUBLIC_DEFAULT_LNG`
+
+## Error Handling Notes
+- Missing env vars return explicit API errors (weather) or throw on startup (Supabase client).
+- Auth-required routes (`/api/completed`, `/api/favorites`) return `401 Unauthorized` if no Supabase session token is provided.
+- Spin flow shows user-facing fallback messages when no activities match filters.
+- Login requests fail with `Invalid invite code` until a valid invite code is entered.
+
+## API Endpoints
+- `GET /api/activities`: filter activities by category/time/energy/social/distance/time-of-day/weather.
+- `POST /api/activities`: add an activity from a URL (AllTrails, Google Maps, Apple Maps, etc.).
+- `POST /api/completed`: log completed experience with rating (1-5) and notes.
+- `GET /api/completed`: map-ready completed activity pins for authenticated user.
+- `GET /api/favorites`: fetch saved activities for authenticated user.
+- `POST /api/favorites`: save an activity for authenticated user.
+- `GET /api/weather`: fetch weather summary by lat/lng.
+- `POST /api/auth/request-link`: invite-code gated magic-link request.
+- `POST /api/resources/request`: logs a New City data-pull request for manual approval and sends optional email notification.
+
+## PWA (Add to Home Screen)
+- The app now includes a web app manifest and service worker for installability.
+- iPhone: open in Safari, tap Share, then `Add to Home Screen`.
+- Android: open in Chrome, tap menu, then `Install app`.
+
+## Add-by-URL Workflow
+- Visit `/add` (top-right nav: `Add URL`).
+- Paste a place/activity link and optionally adjust category/duration/energy/social context.
+- The app parses name/coordinates when available and saves the activity.
+
+## New City Approval Requests
+- The `Update to my current city` button now submits a request instead of performing an immediate pull.
+- Requests are appended to `data/nearby_requests.csv` with status `pending_approval`.
+- Optional email notifications are sent if these env vars are set:
+  - `RESEND_API_KEY`
+  - `APPROVAL_EMAIL_FROM`
+  - `APPROVAL_EMAIL_TO`

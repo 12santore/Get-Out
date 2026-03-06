@@ -1,0 +1,313 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --deep-indigo: #3a4f7a;
+  --sunset-orange: #ff8a5b;
+  --ocean-teal: #3aafa9;
+  --warm-sand: #f6f1e9;
+  --soft-white: #fafafa;
+  --text-dark: #1e1e1e;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text-dark);
+  background:
+    radial-gradient(1000px 480px at 85% -5%, rgba(255, 138, 91, 0.2), rgba(255, 138, 91, 0)),
+    radial-gradient(900px 420px at 10% 0%, rgba(58, 175, 169, 0.22), rgba(58, 175, 169, 0)),
+    var(--soft-white);
+}
+
+main {
+  width: 100%;
+  max-width: 420px;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(58, 79, 122, 0.08);
+  box-shadow: 0 8px 22px rgba(31, 42, 68, 0.08);
+}
+
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  min-height: 176px;
+  padding: 20px;
+  background: linear-gradient(145deg, #3a4f7a, #3aafa9);
+  box-shadow: 0 12px 28px rgba(58, 79, 122, 0.25);
+}
+
+.hero-landscape {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(700px 220px at 20% 120%, rgba(246, 241, 233, 0.2), rgba(246, 241, 233, 0)),
+    linear-gradient(to top, rgba(30, 30, 30, 0.22), rgba(30, 30, 30, 0));
+}
+
+.chip {
+  border-radius: 999px;
+  border: 1px solid rgba(58, 79, 122, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 6px 12px;
+  color: var(--deep-indigo);
+}
+
+.nav-pill {
+  border-radius: 999px;
+  border: 1px solid rgba(58, 79, 122, 0.2);
+  background: linear-gradient(140deg, rgba(58, 79, 122, 0.1), rgba(58, 175, 169, 0.1));
+  color: #2e3f64;
+  padding: 8px 12px;
+  white-space: nowrap;
+  font-weight: 600;
+  transition: all 140ms ease;
+}
+
+.nav-pill:hover {
+  border-color: rgba(255, 138, 91, 0.55);
+  background: linear-gradient(135deg, #ff8a5b, #ffc371);
+  color: #fff;
+}
+
+.scroll-top-brandbar {
+  position: fixed;
+  left: 50%;
+  top: 10px;
+  z-index: 70;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 420px;
+  border-radius: 12px;
+  border: 1px solid rgba(58, 79, 122, 0.18);
+  background: linear-gradient(140deg, rgba(58, 79, 122, 0.95), rgba(58, 175, 169, 0.92));
+  color: #fff;
+  padding: 8px 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 12px 28px rgba(31, 42, 68, 0.3);
+  animation: slideDown 180ms ease-out;
+}
+
+.chip-pill {
+  border-radius: 999px;
+  border: 1px solid rgba(58, 79, 122, 0.14);
+  background: #fff;
+  color: #2f3f62;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  transition: all 140ms ease;
+}
+
+.chip-pill-active {
+  background: linear-gradient(135deg, #ff8a5b, #ffc371);
+  border-color: transparent;
+  color: #fff;
+}
+
+.primary-btn {
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff8a5b, #ffc371);
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 16px;
+  box-shadow: 0 10px 24px rgba(255, 138, 91, 0.35);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 30px rgba(255, 138, 91, 0.42);
+}
+
+.suggestion-card {
+  position: relative;
+  min-height: 124px;
+  border-radius: 16px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 8px 24px rgba(31, 42, 68, 0.18);
+  padding: 14px;
+}
+
+.suggestion-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(20, 26, 36, 0.56), rgba(20, 26, 36, 0.18));
+}
+
+.spin-cta {
+  width: 100%;
+  border-radius: 999px;
+  padding: 16px 20px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #ff8a5b, #ffc371);
+  box-shadow: 0 12px 28px rgba(255, 138, 91, 0.35);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.spin-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(255, 138, 91, 0.42);
+}
+
+.spin-cta-active {
+  animation: pulseGlow 900ms ease-in-out infinite alternate;
+}
+
+.result-card {
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(58, 79, 122, 0.1);
+  box-shadow: 0 10px 26px rgba(31, 42, 68, 0.1);
+}
+
+.result-image {
+  min-height: 148px;
+  background-size: cover;
+  background-position: center;
+}
+
+.lightbox-btn {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+.category-pin {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 6px 15px rgba(31, 42, 68, 0.2);
+}
+
+.pin-bounce {
+  display: inline-block;
+  animation: pinBounce 1.1s ease-in-out infinite;
+}
+
+.fade-in {
+  animation: fadeInUp 320ms ease both;
+}
+
+.dice-overlay-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(30, 30, 30, 0.35);
+  backdrop-filter: blur(2px);
+}
+
+.dice-roll-wrap {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: center;
+}
+
+.dice-silhouette {
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 2rem;
+  color: #fff;
+  background: rgba(58, 79, 122, 0.95);
+  box-shadow: 0 10px 30px rgba(30, 30, 30, 0.28);
+}
+
+.dice-left {
+  animation: rollLeft 1s ease-in-out;
+}
+
+.dice-right {
+  animation: rollRight 1s ease-in-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  from {
+    box-shadow: 0 8px 22px rgba(255, 138, 91, 0.35);
+  }
+  to {
+    box-shadow: 0 14px 32px rgba(255, 138, 91, 0.5);
+  }
+}
+
+@keyframes pinBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes rollLeft {
+  0% {
+    transform: rotate(0deg) scale(0.95);
+  }
+  50% {
+    transform: rotate(340deg) scale(1.08) translateY(-4px);
+  }
+  100% {
+    transform: rotate(720deg) scale(1);
+  }
+}
+
+@keyframes rollRight {
+  0% {
+    transform: rotate(0deg) scale(0.95);
+  }
+  50% {
+    transform: rotate(-360deg) scale(1.08) translateY(-4px);
+  }
+  100% {
+    transform: rotate(-730deg) scale(1);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
