@@ -50,15 +50,42 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [seedRows, reviewRows] = await Promise.all([pullScottsdaleSeedActivities(), pullScottsdaleCacheReviewItems()]);
-    const newSeedRows = await filterNewActivitiesBySourceUrl(seedRows);
+    let seedRows: Awaited<ReturnType<typeof pullScottsdaleSeedActivities>> = [];
+    let reviewRows: Awaited<ReturnType<typeof pullScottsdaleCacheReviewItems>> = [];
+    let seedError: string | null = null;
+    let reviewError: string | null = null;
+
+    try {
+      seedRows = await pullScottsdaleSeedActivities();
+    } catch (error) {
+      seedError = error instanceof Error ? error.message : "Seed pull failed.";
+    }
+
+    try {
+      reviewRows = await pullScottsdaleCacheReviewItems();
+    } catch (error) {
+      reviewError = error instanceof Error ? error.message : "Review pull failed.";
+    }
+
+    if (seedError && reviewError) {
+      return NextResponse.json(
+        {
+          error: "All cache sources failed.",
+          seedError,
+          reviewError
+        },
+        { status: 500 }
+      );
+    }
+
+    const newSeedRows = seedRows.length ? await filterNewActivitiesBySourceUrl(seedRows) : [];
 
     if (newSeedRows.length) {
       await supabaseServer.from("activities").insert(newSeedRows);
     }
 
-    await supabaseServer.from("cache_review_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (reviewRows.length) {
+      await supabaseServer.from("cache_review_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
       await supabaseServer.from("cache_review_items").insert(reviewRows);
     }
 
@@ -66,13 +93,16 @@ export async function GET(request: NextRequest) {
       kind: "cache_refresh",
       provider: "hosted_job",
       estimatedUsd: configuredCap("ESTIMATED_CACHE_REFRESH_COST_USD", 0),
-      notes: `seed_inserted:${newSeedRows.length}|review_rows:${reviewRows.length}`
+      notes: `seed_inserted:${newSeedRows.length}|review_rows:${reviewRows.length}|seed_error:${seedError ?? "none"}|review_error:${reviewError ?? "none"}`
     });
 
     return NextResponse.json({
       ok: true,
       insertedSeedRows: newSeedRows.length,
-      reviewRows: reviewRows.length
+      reviewRows: reviewRows.length,
+      partial: Boolean(seedError || reviewError),
+      seedError,
+      reviewError
     });
   } catch (error) {
     return NextResponse.json(
