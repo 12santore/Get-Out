@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AppHeader } from "@/components/AppHeader";
+import { AuthGate } from "@/components/AuthGate";
 import { PwaRegister } from "@/components/PwaRegister";
 import "./globals.css";
 
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} min-h-screen`}>
         <PwaRegister />
         <AppHeader />
-        <main className="mx-auto w-full max-w-[420px] px-4 pb-16">{children}</main>
+        <main className="mx-auto w-full max-w-[420px] px-4 pb-16">
+          <AuthGate>{children}</AuthGate>
+        </main>
       </body>
     </html>
   );

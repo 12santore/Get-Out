@@ -34,6 +34,32 @@ Get Out is a full-stack Next.js app that helps Kara beat boredom by recommending
   - Experience Scottsdale events listing (`https://www.experiencescottsdale.com/events/`) + event detail pages
 - Output is intentionally written to a **review CSV** so you can manually curate before merge.
 
+## Sync CSVs To Google Sheets
+This pushes every CSV in `data/` to tabs in a Google Sheet owned by your Google account.
+
+1. Create a new Google Sheet in your `12santore@gmail.com` account.
+2. Open [script.new](https://script.new) while signed into that account.
+3. Paste the code from `scripts/google_sheets_sync_receiver.gs`.
+4. In Apps Script:
+   - Go to `Project Settings` -> `Script properties`
+   - Add `SYNC_SECRET` with a long random value.
+5. Deploy:
+   - `Deploy` -> `New deployment`
+   - Type: `Web app`
+   - Execute as: `Me`
+   - Who has access: `Anyone with the link`
+   - Copy the web app URL.
+6. Fill `.env.local`:
+   - `GOOGLE_SHEETS_WEBHOOK_URL` = web app URL
+   - `GOOGLE_SHEETS_SYNC_SECRET` = same `SYNC_SECRET` value
+   - `GOOGLE_SHEETS_SPREADSHEET_ID` = ID from your sheet URL
+7. Run:
+   - `npm run sync:google-sheets`
+
+What happens:
+- Every file in `data/*.csv` becomes/updates a tab in your sheet.
+- Example: `data/scottsdale_activities.csv` -> tab `scottsdale_activities`.
+
 ## Supabase Auth Setup
 1. In Supabase Dashboard, enable Email provider under `Authentication -> Providers`.
 2. Add redirect URL: `http://localhost:3000`.
