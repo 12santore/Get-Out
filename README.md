@@ -13,6 +13,7 @@ Get Out is a full-stack Next.js app that helps Kara beat boredom by recommending
 - In demo mode (when Supabase keys are missing), `/api/activities` pulls from this CSV.
 - Current seed: 50 restaurants + 50 trails/movement options pulled from OpenStreetMap around Scottsdale.
 - Curated municipality/CVB review pull: `data/scottsdale_city_sources_review.csv`
+- Spend audit log: `data/spend_audit.csv`
 
 ## Quick Start
 1. Install dependencies:
@@ -33,6 +34,9 @@ Get Out is a full-stack Next.js app that helps Kara beat boredom by recommending
   - City of Scottsdale community calendar API (`https://api.withapps.io/api/v2/organizations/16/communities/190/resources/published`)
   - Experience Scottsdale events listing (`https://www.experiencescottsdale.com/events/`) + event detail pages
 - Output is intentionally written to a **review CSV** so you can manually curate before merge.
+- Main cache review files:
+  - `data/scottsdale_activities.csv`
+  - `data/scottsdale_city_sources_review.csv`
 
 ## Sync CSVs To Google Sheets
 This pushes every CSV in `data/` to tabs in a Google Sheet owned by your Google account.
@@ -76,6 +80,18 @@ See `.env.example`:
 - `INVITE_CODES`
 - `NEXT_PUBLIC_DEFAULT_LAT`
 - `NEXT_PUBLIC_DEFAULT_LNG`
+- `WEATHER_API_ENABLED`
+- `WEATHER_NO_CHARGE_MODE`
+- `NEARBY_PULLS_ENABLED`
+- `NEW_CITY_REQUESTS_ENABLED`
+- `DAILY_WEATHER_CALL_LIMIT`
+- `DAILY_NEARBY_PULL_LIMIT`
+- `DAILY_NEW_CITY_REQUEST_LIMIT`
+- `MAX_NEARBY_RADIUS_KM`
+- `MAX_NEARBY_RESULTS_PER_CATEGORY`
+- `ESTIMATED_WEATHER_CALL_COST_USD`
+- `ESTIMATED_NEARBY_PULL_COST_USD`
+- `ESTIMATED_RESEND_EMAIL_COST_USD`
 
 ## Error Handling Notes
 - Missing env vars return explicit API errors (weather) or throw on startup (Supabase client).
@@ -111,3 +127,20 @@ See `.env.example`:
   - `RESEND_API_KEY`
   - `APPROVAL_EMAIL_FROM`
   - `APPROVAL_EMAIL_TO`
+
+## Spend Safeguards
+- Kill switches:
+  - `WEATHER_NO_CHARGE_MODE=true` guarantees no external weather API calls (demo weather fallback only).
+  - `WEATHER_API_ENABLED=false` disables weather API calls.
+  - `NEARBY_PULLS_ENABLED=false` disables nearby pull API calls.
+  - `NEW_CITY_REQUESTS_ENABLED=false` disables city update requests.
+- Hard caps:
+  - `DAILY_WEATHER_CALL_LIMIT`
+  - `DAILY_NEARBY_PULL_LIMIT`
+  - `DAILY_NEW_CITY_REQUEST_LIMIT`
+  - `MAX_NEARBY_RADIUS_KM`
+  - `MAX_NEARBY_RESULTS_PER_CATEGORY`
+- Auditing:
+  - Weather calls, nearby pulls, and request-email sends append spend estimates to `data/spend_audit.csv`.
+- Client-side weather cache:
+  - Weather is cached for 60 minutes in browser storage to reduce API calls when weather API is enabled.

@@ -1,33 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendFile, mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { appendCsvRow, countCsvRowsForDate, ensureCsvHeader, envNumber } from "@/lib/csv-usage";
 
 const requestLogPath = join(process.cwd(), "data", "nearby_requests.csv");
-
-function csvEscape(value: string) {
-  return value.replace(/,/g, " ").replace(/\n/g, " ").trim();
-}
+const spendAuditPath = join(process.cwd(), "data", "spend_audit.csv");
 
 async function ensureRequestLogHeader() {
-  try {
-    await stat(requestLogPath);
-  } catch {
-    await mkdir(join(process.cwd(), "data"), { recursive: true });
-    await appendFile(requestLogPath, "request_id,requested_at,status,lat,lng,requester_email\n", "utf-8");
-  }
+  await ensureCsvHeader(requestLogPath, "request_id,requested_at,status,lat,lng,requester_email");
+}
+
+async function ensureSpendAuditHeader() {
+  await ensureCsvHeader(spendAuditPath, "logged_at,kind,provider,estimated_usd,notes");
 }
 
 async function logRequest(params: { requestId: string; lat: number; lng: number; requesterEmail: string }) {
   await ensureRequestLogHeader();
-  const row = [
-    csvEscape(params.requestId),
+  await appendCsvRow(requestLogPath, [
+    params.requestId,
     new Date().toISOString(),
     "pending_approval",
     String(params.lat),
     String(params.lng),
-    csvEscape(params.requesterEmail)
-  ].join(",");
-  await appendFile(requestLogPath, `${row}\n`, "utf-8");
+    params.requesterEmail
+  ]);
+}
+
+async function logSpend(params: { kind: string; provider: string; estimatedUsd: number; notes: string }) {
+  await ensureSpendAuditHeader();
+  await appendCsvRow(spendAuditPath, [
+    new Date().toISOString(),
+    params.kind,
+    params.provider,
+    params.estimatedUsd.toFixed(4),
+    params.notes
+  ]);
 }
 
 async function sendApprovalEmail(params: { requestId: string; lat: number; lng: number; requesterEmail: string }) {
@@ -67,10 +73,21 @@ async function sendApprovalEmail(params: { requestId: string; lat: number; lng: 
     return { sent: false, reason: "provider_error" as const };
   }
 
+  await logSpend({
+    kind: "email",
+    provider: "resend",
+    estimatedUsd: envNumber("ESTIMATED_RESEND_EMAIL_COST_USD", 0),
+    notes: `city_request:${params.requestId}`
+  });
+
   return { sent: true as const };
 }
 
 export async function POST(request: NextRequest) {
+  if ((process.env.NEW_CITY_REQUESTS_ENABLED ?? "true").toLowerCase() === "false") {
+    return NextResponse.json({ error: "New city requests are temporarily disabled." }, { status: 503 });
+  }
+
   const payload = (await request.json().catch(() => ({}))) as {
     lat?: number;
     lng?: number;
@@ -83,6 +100,13 @@ export async function POST(request: NextRequest) {
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json({ error: "lat and lng are required" }, { status: 400 });
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyLimit = envNumber("DAILY_NEW_CITY_REQUEST_LIMIT", 10);
+  const todayCount = await countCsvRowsForDate(requestLogPath, 1, today);
+  if (todayCount >= dailyLimit) {
+    return NextResponse.json({ error: "Daily request cap reached. Try again tomorrow." }, { status: 429 });
   }
 
   const requestId = `REQ-${Date.now().toString(36).toUpperCase()}`;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendFile, mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { appendCsvRow, countCsvRowsForDate, ensureCsvHeader, envNumber } from "@/lib/csv-usage";
 import { getDemoActivities } from "@/lib/demo-activity-store";
 import { haversineKm } from "@/lib/filter";
 import { inferCuisineFromName, normalizeCuisineTags } from "@/lib/food";
@@ -8,6 +8,7 @@ import { Activity, Category } from "@/lib/types";
 
 type NearbyResponse = Record<Category, Activity[]>;
 const pullLogPath = join(process.cwd(), "data", "nearby_pulls.csv");
+const spendAuditPath = join(process.cwd(), "data", "spend_audit.csv");
 const bannedVenueTypes = new Set([
   "bar",
   "nightclub",
@@ -24,40 +25,36 @@ const bannedVenueTypes = new Set([
 const bannedNameKeywords = ["bar", "nightclub", "hookah", "casino", "strip club", "liquor", "sportsbook", "dive bar"];
 
 async function ensurePullLogHeader() {
-  try {
-    await stat(pullLogPath);
-  } catch {
-    await mkdir(join(process.cwd(), "data"), { recursive: true });
-    await appendFile(pullLogPath, "pulled_at,lat,lng,category,name,source_url\n", "utf-8");
-  }
+  await ensureCsvHeader(pullLogPath, "pulled_at,lat,lng,category,name,source_url");
 }
 
-function csvEscape(value: string) {
-  return value.replace(/,/g, " ").replace(/\n/g, " ").trim();
+async function ensureSpendAuditHeader() {
+  await ensureCsvHeader(spendAuditPath, "logged_at,kind,provider,estimated_usd,notes");
 }
 
-async function logNearbyPull(lat: number, lng: number, payload: NearbyResponse) {
+async function logNearbyPull(lat: number, lng: number, payload: NearbyResponse, source: "overpass" | "fallback") {
   await ensurePullLogHeader();
   const pulledAt = new Date().toISOString();
-  const rows: string[] = [];
+  let rowCount = 0;
+  const writes: Array<Promise<void>> = [];
   (Object.keys(payload) as Category[]).forEach((category) => {
     payload[category].forEach((activity) => {
-      rows.push(
-        [
-          pulledAt,
-          String(lat),
-          String(lng),
-          category,
-          csvEscape(activity.name),
-          csvEscape(activity.source_url ?? "")
-        ].join(",")
-      );
+      rowCount += 1;
+      writes.push(appendCsvRow(pullLogPath, [pulledAt, String(lat), String(lng), category, activity.name, activity.source_url ?? ""]));
     });
   });
-  if (rows.length) await appendFile(pullLogPath, `${rows.join("\n")}\n`, "utf-8");
+  if (writes.length) await Promise.all(writes);
+  await ensureSpendAuditHeader();
+  await appendCsvRow(spendAuditPath, [
+    new Date().toISOString(),
+    "nearby_pull",
+    source,
+    envNumber("ESTIMATED_NEARBY_PULL_COST_USD", 0).toFixed(4),
+    `rows:${rowCount}`
+  ]);
 }
 
-function groupTopTenByCategory(activities: Activity[], lat: number, lng: number): NearbyResponse {
+function groupTopByCategory(activities: Activity[], lat: number, lng: number, maxPerCategory: number): NearbyResponse {
   const withDistance = activities
     .filter((activity) => activity.lat !== null && activity.lng !== null)
     .map((activity) => ({
@@ -75,14 +72,14 @@ function groupTopTenByCategory(activities: Activity[], lat: number, lng: number)
 
   for (const entry of withDistance) {
     const bucket = grouped[entry.activity.category];
-    if (bucket.length < 10) bucket.push(entry.activity);
-    if (Object.values(grouped).every((list) => list.length >= 10)) break;
+    if (bucket.length < maxPerCategory) bucket.push(entry.activity);
+    if (Object.values(grouped).every((list) => list.length >= maxPerCategory)) break;
   }
 
   return grouped;
 }
 
-async function pullFromOverpass(lat: number, lng: number, radiusMeters: number): Promise<NearbyResponse> {
+async function pullFromOverpass(lat: number, lng: number, radiusMeters: number, maxPerCategory: number): Promise<NearbyResponse> {
   const endpoint = "https://overpass-api.de/api/interpreter";
   const query = `
     [out:json][timeout:60];
@@ -241,26 +238,40 @@ async function pullFromOverpass(lat: number, lng: number, radiusMeters: number):
     });
   }
 
-  return groupTopTenByCategory(converted, lat, lng);
+  return groupTopByCategory(converted, lat, lng, maxPerCategory);
 }
 
 export async function GET(request: NextRequest) {
+  if ((process.env.NEARBY_PULLS_ENABLED ?? "true").toLowerCase() === "false") {
+    return NextResponse.json({ error: "Nearby pulls are temporarily disabled." }, { status: 503 });
+  }
+
   const lat = Number(request.nextUrl.searchParams.get("lat"));
   const lng = Number(request.nextUrl.searchParams.get("lng"));
-  const radiusKm = Number(request.nextUrl.searchParams.get("radiusKm") ?? "24");
+  const requestedRadiusKm = Number(request.nextUrl.searchParams.get("radiusKm") ?? "24");
+  const maxRadiusKm = envNumber("MAX_NEARBY_RADIUS_KM", 25);
+  const radiusKm = Math.min(Number.isFinite(requestedRadiusKm) ? requestedRadiusKm : 24, maxRadiusKm);
+  const maxPerCategory = envNumber("MAX_NEARBY_RESULTS_PER_CATEGORY", 10);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json({ error: "lat and lng are required" }, { status: 400 });
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyLimit = envNumber("DAILY_NEARBY_PULL_LIMIT", 20);
+  const todayPullRows = await countCsvRowsForDate(pullLogPath, 0, today);
+  if (todayPullRows >= dailyLimit * Math.max(1, maxPerCategory)) {
+    return NextResponse.json({ error: "Daily nearby pull cap reached." }, { status: 429 });
+  }
+
   try {
-    const live = await pullFromOverpass(lat, lng, Math.max(2000, Math.floor(radiusKm * 1000)));
-    await logNearbyPull(lat, lng, live);
+    const live = await pullFromOverpass(lat, lng, Math.max(2000, Math.floor(radiusKm * 1000)), maxPerCategory);
+    await logNearbyPull(lat, lng, live, "overpass");
     return NextResponse.json(live);
   } catch {
     // Fallback keeps demo mode useful if live map data is unavailable.
-    const fallback = groupTopTenByCategory(getDemoActivities(), lat, lng);
-    await logNearbyPull(lat, lng, fallback);
+    const fallback = groupTopByCategory(getDemoActivities(), lat, lng, maxPerCategory);
+    await logNearbyPull(lat, lng, fallback, "fallback");
     return NextResponse.json(fallback);
   }
 }
